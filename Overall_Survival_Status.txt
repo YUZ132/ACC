@@ -1,0 +1,4 @@
+Category	Number of patients	Percentage of patients
+0:LIVING	93	8.9%
+1:DECEASED	52	5.0%
+NA	900	86.1%

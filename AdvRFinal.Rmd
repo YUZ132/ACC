@@ -1,0 +1,159 @@
+---
+title: "Final Project"
+author: "Joshua Witten & Yufeng Zhu"
+date: "4/22/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dygraphs)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(readxl)
+library(dplyr)
+library(shiny)
+library(shinyWidgets)
+library(shinydashboard)
+library(shinythemes)
+library (janitor)
+```
+
+```{r}
+cancer <- read.delim("Cancer_Type.txt")%>% clean_names()
+fga <- read.delim("Fraction_Genome_Altered.txt")%>% clean_names()
+survivalm <- read.delim("KM_Plot__Overall_Survival__(months).txt")%>% clean_names()
+mugenes <- read.delim("Mutated_Genes.txt")%>% clean_names()
+mucount <- read.delim("Mutation_Count.txt")%>% clean_names()
+muvsfra <- read.delim("Mutation_Count_vs_Fraction_Genome_Altered.txt")%>% clean_names()
+survival <- read.delim("Overall_Survival_Status.txt")%>% clean_names()
+somatic <- read.delim("Somatic_Status.txt")%>% clean_names()
+```
+```{r}
+options(max.print = 15000)
+gene<-read.table(file = 'acc_2019_clinical_data.tsv', sep = '\t', header = TRUE) %>% clean_names()
+```
+
+```{r}
+overall <- read_tsv("acc_2019_clinical_data.tsv")
+
+overall<-overall%>%drop_na()%>%clean_names()%>%select(-c(cancer_type,cancer_type_detailed, study,study_id,oncotree_code, patient_id, sample_id, data_source))
+overall
+```
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Basic Dataset"),
+  # Create a new Row in the UI for selectInputs
+  fluidRow(
+    column(4,
+        selectInput("data_source",
+                    "Data source:",
+                    c("All",
+                      unique(as.character(gene$data_source))))
+    ),
+      column(4,
+        selectInput("cancer_type",
+                    "Cancer type:",
+                    c("All",
+                      unique(as.character(gene$cancer_type))))
+    ),
+    column(4,
+        selectInput("sex",
+                    "Sex:",
+                    c("All",
+                      unique(as.character(gene$sex))))
+        
+    ),
+    column(4,
+        selectInput("oncotree_code",
+                    "oncotree_code:",
+                    c("All",
+                      unique(as.character(gene$oncotree_code))))
+        
+    ),
+    column(4,
+        selectInput("somatic_status",
+                    "Somatic status:",
+                    c("All",
+                      unique(as.character(gene$somatic_status))))
+        
+    ),
+    column(4,
+        selectInput("sample_type",
+                    "Sample type:",
+                    c("All",
+                      unique(as.character(gene$sample_type))))
+        
+    )
+  ),
+  # Create a new row for the table.
+  DT::dataTableOutput("table"),
+  
+#1. Select 1 of 3 continuous variables as y-variable and x-variable
+  selectInput("y_varb", label="Y-axis variable",choices=names(overall)),
+  selectInput("x_varb", label="X-axis variable", choices=names(overall)),   #2.
+  selectInput("cat_colour", label="Select point color variable", choices=names(overall)),   #3. Select sample size
+  selectInput("sample_sz", label = "Select sample size", choices = c(50:137)),
+  #4. Three different types  of linear regression plots
+  selectInput("formula", label="Formula", choices=c("y~x", "y~poly(x,2)", "y~log(x)")),
+  #5. Reset plot output after each selection
+  plotOutput("plot", dblclick = "plot_reset")
+  )
+  server <- function(input, output) {
+  # Filter data based on selections
+ output$table <- DT::renderDataTable(DT::datatable({
+    data <- gene
+     if (input$cancer_type != "All") {
+      data <- data[data$cancer_type == input$cancer_type,]
+    }
+    if (input$oncotree_code != "All") {
+      data <- data[data$oncotree_code == input$oncotree_code,]
+    }
+    if (input$sex != "All") {
+      data <- data[data$sex == input$sex,]
+    }
+     if (input$data_source != "All") {
+      data <- data[data$data_source == input$data_source,]
+     }
+    
+    if (input$somatic_status != "All") {
+      data <- data[data$somatic_status == input$somatic_status,]
+    }
+    
+    if (input$sample_type != "All") {
+      data <- data[data$sample_type == input$sample_type,]
+    }
+    data
+  }))
+  
+    #1. Register the y-variable selected, the remaining variables are now options for x-variable
+  remaining <- reactive({
+    names(overall)[c(-1,-3,-4,-match(input$y_varb,names(overall)))]
+  })
+  
+  observeEvent(remaining(),{
+    choices <- remaining()
+    updateSelectInput(session = getDefaultReactiveDomain(),inputId = "x_varb", choices = choices)
+  })
+  
+  
+  output$plot <- renderPlot({
+    #Produce scatter plot
+    subset_data<-overall[1:input$sample_sz,]
+    ggplot(subset_data, aes_string(input$x_varb, input$y_varb))+
+      geom_point(aes_string(colour=input$cat_colour))+
+      geom_smooth(method="lm",formula=input$formula)}, res = 96)
+  }  
+  
+
+  
+# Run the application 
+shinyApp(ui = ui, server = server)
+```
+
